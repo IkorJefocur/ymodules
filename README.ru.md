@@ -1,4 +1,4 @@
-Модульная система YModules [![NPM version](https://badge.fury.io/js/ym.png)](http://badge.fury.io/js/ym) [![Build Status](https://travis-ci.org/ymaps/modules.png?branch=master)](https://travis-ci.org/ymaps/modules)
+Модульная система YModules
 
 [Что это? Зачем и для кого? Как пользоваться?](https://github.com/ymaps/modules/blob/master/what-is-this.md)
 
@@ -6,12 +6,13 @@
   1. Асинхронный require модулей
   2. Асинхронный provide модулей
   3. Возможность передекларации/додекларации модуля
+  4. Возможность перезаписи зависимостей существующего модуля с его повторным подключением
 
 #### Почему не CommonJS?
-Смотри пункты 1, 2 и 3 требований
+Смотри пункты 1, 2, 3 и 4 требований
 
 #### Почему не AMD?
-Смотри пункты 2 и 3 требований
+Смотри пункты 2, 3 и 4 требований
 
 Спецификация API
 ----------------
@@ -50,6 +51,7 @@ void setOptions(Object options)
 ##### Доступные опции
   - `trackCircularDependencies` - при `false` не проверяет зацикленные зависимости. По умолчанию `true`
   - `allowMultipleDeclarations` - при `false` запрещает расширение (переопределение) модулей и генерирует ошибку. По умолчанию `true`
+  - `allowDependenciesOverride` - при `false` запрещает перезапись зависимостей и клонирование модулей. По умолчанию `true`
 
 #### Получение текущего состояния модуля в хранилище
 ````javascript

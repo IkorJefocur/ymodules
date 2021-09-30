@@ -1,418 +1,406 @@
-/**
- * Modules
- *
- * Copyright (c) 2013 Filatov Dmitry (dfilatov@yandex-team.ru)
- * Dual licensed under the MIT and GPL licenses:
- * http://www.opensource.org/licenses/mit-license.php
- * http://www.gnu.org/licenses/gpl.html
- *
- * @version 0.1.2
- */
-
 (function(global) {
 
-var undef,
+const
+	DECL_STATES = {
+		NOT_RESOLVED : 'NOT_RESOLVED',
+		IN_RESOLVING : 'IN_RESOLVING',
+		RESOLVED     : 'RESOLVED'
+	},
+	NOT_DEFINED_STATE = 'NOT_DEFINED';
 
-    DECL_STATES = {
-        NOT_RESOLVED : 'NOT_RESOLVED',
-        IN_RESOLVING : 'IN_RESOLVING',
-        RESOLVED     : 'RESOLVED'
-    },
+/**
+ * Creates a new instance of modular system
+ * @returns {Object}
+ */
+function create() {
+	const
+		curOptions = {
+			trackCircularDependencies : true,
+			allowMultipleDeclarations : true,
+			allowDependenciesOverride : true
+		},
+		modulesStorage = {};
+	let
+		waitForNextTick = false,
+		pendingRequires = [];
 
-    /**
-     * Creates a new instance of modular system
-     * @returns {Object}
-     */
-    create = function() {
-        var curOptions = {
-                trackCircularDependencies : true,
-                allowMultipleDeclarations : true
-            },
+	/**
+	 * Defines module
+	 * @param {String} name
+	 * @param {String[]} [deps]
+	 * @param {Function} declFn
+	 */
+	function define(name, deps, declFn) {
+		if (!declFn) {
+			declFn = deps;
+			deps = [];
+		}
 
-            modulesStorage = {},
-            waitForNextTick = false,
-            pendingRequires = [],
+		if (!modulesStorage[name])
+			modulesStorage[name] = {
+				name : name,
+				decl : []
+			};
+		const module = modulesStorage[name];
 
-            /**
-             * Defines module
-             * @param {String} name
-             * @param {String[]} [deps]
-             * @param {Function} declFn
-             */
-            define = function(name, deps, declFn) {
-                if(!declFn) {
-                    declFn = deps;
-                    deps = [];
-                }
+		module.decl[0] = {
+			name       : name,
+			prev       : module.decl[0],
+			fn         : declFn,
+			state      : DECL_STATES.NOT_RESOLVED,
+			deps       : deps,
+			dependents : [],
+			exports    : undefined
+		};
+	}
 
-                var module = modulesStorage[name];
-                if(!module) {
-                    module = modulesStorage[name] = {
-                        name : name,
-                        decl : undef
-                    };
-                }
+	/**
+	 * Requires modules
+	 * @param {String|String[]} modules
+	 * @param {Function} cb
+	 * @param {Function} [errorCb]
+	 */
+	function require(modules, cb, errorCb) {
+		if (typeof modules === 'string')
+			modules = [modules];
 
-                module.decl = {
-                    name       : name,
-                    prev       : module.decl,
-                    fn         : declFn,
-                    state      : DECL_STATES.NOT_RESOLVED,
-                    deps       : deps,
-                    dependents : [],
-                    exports    : undef
-                };
-            },
+		if (!waitForNextTick) {
+			waitForNextTick = true;
+			nextTick(onNextTick);
+		}
 
-            /**
-             * Requires modules
-             * @param {String|String[]} modules
-             * @param {Function} cb
-             * @param {Function} [errorCb]
-             */
-            require = function(modules, cb, errorCb) {
-                if(typeof modules === 'string') {
-                    modules = [modules];
-                }
+		pendingRequires.push({
+			deps : modules,
+			cb   : function(exports, error) {
+				error
+					? (errorCb || onError)(error)
+					: cb.apply(global, exports);
+			}
+		});
+	}
 
-                if(!waitForNextTick) {
-                    waitForNextTick = true;
-                    nextTick(onNextTick);
-                }
+	/**
+	 * Returns state of module
+	 * @param {String} name
+	 * @returns {String} state, possible values are NOT_DEFINED, NOT_RESOLVED, IN_RESOLVING, RESOLVED
+	 */
+	function getState(name) {
+		const module = modulesStorage[name];
+		return module
+			? DECL_STATES[module.decl[0].state]
+			: NOT_DEFINED_STATE;
+	}
 
-                pendingRequires.push({
-                    deps : modules,
-                    cb   : function(exports, error) {
-                        error?
-                            (errorCb || onError)(error) :
-                            cb.apply(global, exports);
-                    }
-                });
-            },
+	/**
+	 * Returns whether the module is defined
+	 * @param {String} name
+	 * @returns {Boolean}
+	 */
+	function isDefined(name) {
+		return !!modulesStorage[name];
+	}
 
-            /**
-             * Returns state of module
-             * @param {String} name
-             * @returns {String} state, possible values are NOT_DEFINED, NOT_RESOLVED, IN_RESOLVING, RESOLVED
-             */
-            getState = function(name) {
-                var module = modulesStorage[name];
-                return module?
-                    DECL_STATES[module.decl.state] :
-                    'NOT_DEFINED';
-            },
+	/**
+	 * Sets options
+	 * @param {Object} options
+	 */
+	function setOptions(options) {
+		Object.assign(curOptions, options);
+	}
 
-            /**
-             * Returns whether the module is defined
-             * @param {String} name
-             * @returns {Boolean}
-             */
-            isDefined = function(name) {
-                return !!modulesStorage[name];
-            },
+	function getStat() {
+		const res = {};
 
-            /**
-             * Sets options
-             * @param {Object} options
-             */
-            setOptions = function(options) {
-                for(var name in options) {
-                    if(options.hasOwnProperty(name)) {
-                        curOptions[name] = options[name];
-                    }
-                }
-            },
+		for (let [name, module] of Object.entries(modulesStorage)) {
+			const state = module.decl[0].state;
+			if (!res[state])
+				res[state] = [];
+			res[state].push(name);
+		}
 
-            getStat = function() {
-                var res = {},
-                    module;
+		return res;
+	}
 
-                for(var name in modulesStorage) {
-                    if(modulesStorage.hasOwnProperty(name)) {
-                        module = modulesStorage[name];
-                        (res[module.decl.state] || (res[module.decl.state] = [])).push(name);
-                    }
-                }
+	function onNextTick() {
+		waitForNextTick = false;
+		applyRequires();
+	}
 
-                return res;
-            },
+	function applyRequires() {
+		const requiresToProcess = pendingRequires;
+		pendingRequires = [];
 
-            onNextTick = function() {
-                waitForNextTick = false;
-                applyRequires();
-            },
+		for (let require of requiresToProcess)
+			requireDeps(null, require.deps, [], require.cb);
+	}
 
-            applyRequires = function() {
-                var requiresToProcess = pendingRequires,
-                    i = 0, require;
+	function requireDeps(fromDecl, deps, path, cb) {
+		let unresolvedDepsCnt = deps.length;
+		if (!unresolvedDepsCnt) {
+			cb([]);
+		}
 
-                pendingRequires = [];
+		const decls = [];
+		function onDeclResolved(_, error) {
+			if (error) {
+				cb(null, error);
+				return;
+			}
 
-                while(require = requiresToProcess[i++]) {
-                    requireDeps(null, require.deps, [], require.cb);
-                }
-            },
+			if (!--unresolvedDepsCnt) {
+				const exports = decls.map(decl => decl.exports);
+				cb(exports);
+			}
+		}
 
-            requireDeps = function(fromDecl, deps, path, cb) {
-                var unresolvedDepsCnt = deps.length;
-                if(!unresolvedDepsCnt) {
-                    cb([]);
-                }
+		for (let dep of deps) {
+			let decl;
 
-                var decls = [],
-                    onDeclResolved = function(_, error) {
-                        if(error) {
-                            cb(null, error);
-                            return;
-                        }
+			if (typeof dep === 'string') {
+				if (!modulesStorage[dep]) {
+					cb(null, buildModuleNotFoundError(dep, fromDecl));
+					return;
+				}
 
-                        if(!--unresolvedDepsCnt) {
-                            var exports = [],
-                                i = 0, decl;
-                            while(decl = decls[i++]) {
-                                exports.push(decl.exports);
-                            }
-                            cb(exports);
-                        }
-                    },
-                    i = 0, len = unresolvedDepsCnt,
-                    dep, decl;
+				decl = modulesStorage[dep].decl[0];
+			}
 
-                while(i < len) {
-                    dep = deps[i++];
-                    if(typeof dep === 'string') {
-                        if(!modulesStorage[dep]) {
-                            cb(null, buildModuleNotFoundError(dep, fromDecl));
-                            return;
-                        }
+			else if (dep instanceof Array) {
+				const [name, overrides] = dep;
 
-                        decl = modulesStorage[dep].decl;
-                    }
-                    else {
-                        decl = dep;
-                    }
+				if (!curOptions.allowDependenciesOverride) {
+					cb(null, buildDependenciesOverrideError(name, fromDecl));
+					return;
+				}
 
-                    decls.push(decl);
+				if (!modulesStorage[name]) {
+					cb(null, buildModuleNotFoundError(name, fromDecl));
+					return;
+				}
 
-                    startDeclResolving(decl, path, onDeclResolved);
-                }
-            },
+				const variants = modulesStorage[name].decl;
+				const base = variants[0];
 
-            startDeclResolving = function(decl, path, cb) {
-                if(decl.state === DECL_STATES.RESOLVED) {
-                    cb(decl.exports);
-                    return;
-                }
-                else if(decl.state === DECL_STATES.IN_RESOLVING) {
-                    curOptions.trackCircularDependencies && isDependenceCircular(decl, path)?
-                        cb(null, buildCircularDependenceError(decl, path)) :
-                        decl.dependents.push(cb);
-                    return;
-                }
+				decl = variants.find(variant => variant.deps.every((dep, index) =>
+					overrides[base.deps[index]]
+						? dep === overrides[base.deps[index]]
+						: dep === base.deps[index]
+				));
 
-                decl.dependents.push(cb);
+				if (!decl) {
+					decl = Object.assign({}, base, {
+						deps: base.deps.map(dep => dep in overrides ? overrides[dep] : dep),
+						dependents: [],
+						state: DECL_STATES.NOT_RESOLVED
+					});
+					variants.push(decl);
+				}
+			}
 
-                if(decl.prev && !curOptions.allowMultipleDeclarations) {
-                    provideError(decl, buildMultipleDeclarationError(decl));
-                    return;
-                }
+			else
+				decl = dep;
 
-                curOptions.trackCircularDependencies && (path = path.slice()).push(decl);
+			decls.push(decl);
 
-                var isProvided = false,
-                    deps = decl.prev? decl.deps.concat([decl.prev]) : decl.deps;
+			startDeclResolving(decl, path, onDeclResolved);
+		}
+	}
 
-                decl.state = DECL_STATES.IN_RESOLVING;
-                requireDeps(
-                    decl,
-                    deps,
-                    path,
-                    function(depDeclsExports, error) {
-                        if(error) {
-                            provideError(decl, error);
-                            return;
-                        }
+	function startDeclResolving(decl, path, cb) {
+		if (decl.state === DECL_STATES.RESOLVED) {
+			cb(decl.exports);
+			return;
+		} else if (decl.state === DECL_STATES.IN_RESOLVING) {
+			curOptions.trackCircularDependencies && isDependenceCircular(decl, path)
+				? cb(null, buildCircularDependenceError(decl, path))
+				: decl.dependents.push(cb);
+			return;
+		}
 
-                        depDeclsExports.unshift(function(exports, error) {
-                            if(isProvided) {
-                                cb(null, buildDeclAreadyProvidedError(decl));
-                                return;
-                            }
+		decl.dependents.push(cb);
 
-                            isProvided = true;
-                            error?
-                                provideError(decl, error) :
-                                provideDecl(decl, exports);
-                        });
+		if (decl.prev && !curOptions.allowMultipleDeclarations) {
+			provideError(decl, buildMultipleDeclarationError(decl));
+			return;
+		}
 
-                        decl.fn.apply(
-                            {
-                                name   : decl.name,
-                                deps   : decl.deps,
-                                global : global
-                            },
-                            depDeclsExports);
-                    });
-            },
+		curOptions.trackCircularDependencies && (path = path.concat([decl]));
 
-            provideDecl = function(decl, exports) {
-                decl.exports = exports;
-                decl.state = DECL_STATES.RESOLVED;
+		let isProvided = false;
+		const deps = decl.prev ? decl.deps.concat([decl.prev]) : decl.deps;
 
-                var i = 0, dependent;
-                while(dependent = decl.dependents[i++]) {
-                    dependent(exports);
-                }
+		decl.state = DECL_STATES.IN_RESOLVING;
+		requireDeps(
+			decl,
+			deps,
+			path,
+			function(depDeclsExports, error) {
+				if (error) {
+					provideError(decl, error);
+					return;
+				}
 
-                decl.dependents = undef;
-            },
+				depDeclsExports.unshift(function(exports, error) {
+					if (isProvided) {
+						cb(null, buildDeclAreadyProvidedError(decl));
+						return;
+					}
 
-            provideError = function(decl, error) {
-                decl.state = DECL_STATES.NOT_RESOLVED;
+					isProvided = true;
+					error
+						? provideError(decl, error)
+						: provideDecl(decl, exports);
+				});
 
-                var i = 0, dependent;
-                while(dependent = decl.dependents[i++]) {
-                    dependent(null, error);
-                }
+				const {name, deps} = decl;
+				decl.fn.apply({global, name, deps}, depDeclsExports);
+			});
+	}
 
-                decl.dependents = [];
-            };
+	function provideDecl(decl, exports) {
+		decl.exports = exports;
+		decl.state = DECL_STATES.RESOLVED;
 
-        return {
-            create     : create,
-            define     : define,
-            require    : require,
-            getState   : getState,
-            isDefined  : isDefined,
-            setOptions : setOptions,
-            getStat    : getStat
-        };
-    },
+		for (let dependent of decl.dependents)
+			dependent(exports);
 
-    onError = function(e) {
-        nextTick(function() {
-            throw e;
-        });
-    },
+		decl.dependents = undefined;
+	}
 
-    buildModuleNotFoundError = function(name, decl) {
-        return Error(decl?
-            'Module "' + decl.name + '": can\'t resolve dependence "' + name + '"' :
-            'Required module "' + name + '" can\'t be resolved');
-    },
+	function provideError(decl, error) {
+		decl.state = DECL_STATES.NOT_RESOLVED;
 
-    buildCircularDependenceError = function(decl, path) {
-        var strPath = [],
-            i = 0, pathDecl;
-        while(pathDecl = path[i++]) {
-            strPath.push(pathDecl.name);
-        }
-        strPath.push(decl.name);
+		for (let dependent of decl.dependents)
+			dependent(null, error);
 
-        return Error('Circular dependence has been detected: "' + strPath.join(' -> ') + '"');
-    },
+		decl.dependents = [];
+	}
 
-    buildDeclAreadyProvidedError = function(decl) {
-        return Error('Declaration of module "' + decl.name + '" has already been provided');
-    },
-
-    buildMultipleDeclarationError = function(decl) {
-        return Error('Multiple declarations of module "' + decl.name + '" have been detected');
-    },
-
-    isDependenceCircular = function(decl, path) {
-        var i = 0, pathDecl;
-        while(pathDecl = path[i++]) {
-            if(decl === pathDecl) {
-                return true;
-            }
-        }
-        return false;
-    },
-
-    nextTick = (function() {
-        var fns = [],
-            enqueueFn = function(fn) {
-                return fns.push(fn) === 1;
-            },
-            callFns = function() {
-                var fnsToCall = fns, i = 0, len = fns.length;
-                fns = [];
-                while(i < len) {
-                    fnsToCall[i++]();
-                }
-            };
-
-        if(typeof process === 'object' && process.nextTick) { // nodejs
-            return function(fn) {
-                enqueueFn(fn) && process.nextTick(callFns);
-            };
-        }
-
-        if(global.setImmediate) { // ie10
-            return function(fn) {
-                enqueueFn(fn) && global.setImmediate(callFns);
-            };
-        }
-
-        if(global.postMessage && !global.opera) { // modern browsers
-            var isPostMessageAsync = true;
-            if(global.attachEvent) {
-                var checkAsync = function() {
-                        isPostMessageAsync = false;
-                    };
-                global.attachEvent('onmessage', checkAsync);
-                global.postMessage('__checkAsync', '*');
-                global.detachEvent('onmessage', checkAsync);
-            }
-
-            if(isPostMessageAsync) {
-                var msg = '__modules' + (+new Date()),
-                    onMessage = function(e) {
-                        if(e.data === msg) {
-                            e.stopPropagation && e.stopPropagation();
-                            callFns();
-                        }
-                    };
-
-                global.addEventListener?
-                    global.addEventListener('message', onMessage, true) :
-                    global.attachEvent('onmessage', onMessage);
-
-                return function(fn) {
-                    enqueueFn(fn) && global.postMessage(msg, '*');
-                };
-            }
-        }
-
-        var doc = global.document;
-        if('onreadystatechange' in doc.createElement('script')) { // ie6-ie8
-            var head = doc.getElementsByTagName('head')[0],
-                createScript = function() {
-                    var script = doc.createElement('script');
-                    script.onreadystatechange = function() {
-                        script.parentNode.removeChild(script);
-                        script = script.onreadystatechange = null;
-                        callFns();
-                    };
-                    head.appendChild(script);
-                };
-
-            return function(fn) {
-                enqueueFn(fn) && createScript();
-            };
-        }
-
-        return function(fn) { // old browsers
-            enqueueFn(fn) && setTimeout(callFns, 0);
-        };
-    })();
-
-if(typeof exports === 'object') {
-    module.exports = create();
+	return {create, define, require, getState, isDefined, setOptions, getStat};
 }
-else {
-    global.modules = create();
+
+function onError(e) {
+	nextTick(function() {
+		throw e;
+	});
 }
+
+function buildModuleNotFoundError(name, decl) {
+	return new Error(
+		decl
+			? `Module "${decl.name}": can\'t resolve dependence "${name}"`
+			: `Required module "${name}" can\'t be resolved`
+	);
+}
+
+function buildCircularDependenceError(decl, path) {
+	const strPath = path.map(pathDecl => pathDecl.name);
+	strPath.push(decl.name);
+
+	return new Error(`Circular dependence has been detected: "${strPath.join(' -> ')}"`);
+}
+
+function buildDeclAreadyProvidedError(decl) {
+	return new Error(`Declaration of module "${decl.name}" has already been provided`);
+}
+
+function buildMultipleDeclarationError(decl) {
+	return new Error(`Multiple declarations of module "${decl.name}" have been detected`);
+}
+
+function buildDependenciesOverrideError(name, decl) {
+	return new Error(
+		decl
+			? `Dependency override of module "${name}" for module "${decl.name}" have been detected`
+			: `Dependency override of module "${name}" have been detected`
+	);
+}
+
+function isDependenceCircular(decl, path) {
+	return path.includes(decl);
+}
+
+const nextTick = (function() {
+	var fns = [],
+		enqueueFn = function(fn) {
+			return fns.push(fn) === 1;
+		},
+		callFns = function() {
+			var fnsToCall = fns, i = 0, len = fns.length;
+			fns = [];
+			while(i < len) {
+				fnsToCall[i++]();
+			}
+		};
+
+	if(typeof process === 'object' && process.nextTick) { // nodejs
+		return function(fn) {
+			enqueueFn(fn) && process.nextTick(callFns);
+		};
+	}
+
+	if(global.setImmediate) { // ie10
+		return function(fn) {
+			enqueueFn(fn) && global.setImmediate(callFns);
+		};
+	}
+
+	if(global.postMessage && !global.opera) { // modern browsers
+		var isPostMessageAsync = true;
+		if(global.attachEvent) {
+			var checkAsync = function() {
+					isPostMessageAsync = false;
+				};
+			global.attachEvent('onmessage', checkAsync);
+			global.postMessage('__checkAsync', '*');
+			global.detachEvent('onmessage', checkAsync);
+		}
+
+		if(isPostMessageAsync) {
+			var msg = '__modules' + (+new Date()),
+				onMessage = function(e) {
+					if(e.data === msg) {
+						e.stopPropagation && e.stopPropagation();
+						callFns();
+					}
+				};
+
+			global.addEventListener?
+				global.addEventListener('message', onMessage, true) :
+				global.attachEvent('onmessage', onMessage);
+
+			return function(fn) {
+				enqueueFn(fn) && global.postMessage(msg, '*');
+			};
+		}
+	}
+
+	var doc = global.document;
+	if('onreadystatechange' in doc.createElement('script')) { // ie6-ie8
+		var head = doc.getElementsByTagName('head')[0],
+			createScript = function() {
+				var script = doc.createElement('script');
+				script.onreadystatechange = function() {
+					script.parentNode.removeChild(script);
+					script = script.onreadystatechange = null;
+					callFns();
+				};
+				head.appendChild(script);
+			};
+
+		return function(fn) {
+			enqueueFn(fn) && createScript();
+		};
+	}
+
+	return function(fn) { // old browsers
+		enqueueFn(fn) && setTimeout(callFns, 0);
+	};
+})();
+
+if (typeof exports === 'object')
+	module.exports = create();
+else
+	global.modules = create();
 
 })(typeof window !== 'undefined' ? window : global);

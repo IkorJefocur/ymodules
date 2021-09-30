@@ -80,6 +80,19 @@ describe('resolving', function() {
             done();
         });
     });
+
+    it('should properly clone existing modules and override their dependencies', function(done) {
+        modules.define('A', provide => provide(['a']));
+        modules.define('B', provide => provide(['b']));
+        modules.define('C', ['A'], (provide, a) => provide(a.concat('c')));
+        modules.define('D', [['C', {'A': 'B'}]], (provide, c) => provide(c.concat('d')));
+
+        modules.require(['C', 'D'], (c, d) => {
+            c.should.have.been.deep.equal(['a', 'c']);
+            d.should.have.been.deep.equal(['b', 'c', 'd']);
+            done();
+        });
+    })
 });
 
 describe('errors', function() {

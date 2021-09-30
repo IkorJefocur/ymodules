@@ -1,33 +1,43 @@
 {
-    "name" : "ym",
-    "version" : "0.1.2",
-    "description" : "Async modular system",
-    "homepage" : "https://github.com/ymaps/modules",
-    "keywords" : ["javascript", "module", "async", "dependency", "injection"],
-    "author" : "",
-    "contributors" : [{
-        "name"  : "Dmitry Filatov",
-        "email" : "dfilatov@yandex-team.ru"
-    }],
-    "repository":{
-        "type" : "git",
-        "url"  : "https://github.com/ymaps/modules.git"
+    "name": "ym",
+    "version": "0.1.2",
+    "description": "Async modular system",
+    "homepage": "https://github.com/ymaps/modules",
+    "keywords": [
+        "javascript",
+        "module",
+        "async",
+        "dependency",
+        "injection"
+    ],
+    "author": "",
+    "contributors": [
+        {
+            "name": "Dmitry Filatov",
+            "email": "dfilatov@yandex-team.ru"
+        }
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ymaps/modules.git"
     },
-    "main" : "modules",
-    "engines" : { "node" : ">= 0.4.0" },
+    "main": "modules",
+    "engines": {
+        "node": ">= 0.4.0"
+    },
     "devDependencies": {
-        "jshint" : "2.3.0",
-        "jscs" : "1.0.0",
-        "nyc" : "^11.0.2",
-        "mocha" : "^3.4.2",
-        "chai" : "^4.0.2"
+        "jshint": "2.3.0",
+        "jscs": "1.0.0",
+        "nyc": "^11.0.2",
+        "mocha": "^3.4.2",
+        "chai": "^4.0.2"
     },
-    "scripts" : {
-        "clover" : "nyc --reporter=clover npm run bdd",
-        "coverage" : "nyc --reporter=text --reporter=html npm run bdd; echo; echo 'Open coverage/index.html file in your browser'",
-        "lint" : "jshint modules.js && jscs modules.js",
-        "bdd" : "mocha -u bdd -R spec --recursive",
-        "test" : "npm run lint && npm run bdd"
+    "scripts": {
+        "clover": "nyc --reporter=clover npm run bdd",
+        "coverage": "nyc --reporter=text --reporter=html npm run bdd; echo; echo 'Open coverage/index.html file in your browser'",
+        "lint": "jshint modules.js && jscs modules.js",
+        "bdd": "mocha -u bdd -R spec --recursive",
+        "test": "npm run lint && npm run bdd"
     },
     "license": "(MIT OR GPL-2.0+)",
     "ignore": [

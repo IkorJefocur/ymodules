@@ -10,12 +10,13 @@ use?](https://github.com/ymaps/modules/blob/master/what-is-this.md) (ru)
   1. Asynchronous require for modules
   2. Asynchronous provide for modules
   3. Extending and redefining a module
+  4. Creating multiple instances of a module with different dependencies
 
 #### Why not CommonJS?
-See #1, #2 and #3 in the list of requirements.
+See #1, #2, #3 and #4 in the list of requirements.
 
 #### Why not AMD?
-See #2 and #3 in the list of requirements.
+See #2, #3 and #4 in the list of requirements.
 
 API spec
 ----------------
@@ -47,8 +48,9 @@ void setOptions(Object options)
 ````
 
 ##### Available options
-  - `trackCircularDependencies` - if set to false doesn’t track circular dependencies. true by default
-  - `allowMultipleDeclarations` - if set to false denies module overloading and provides an error. true by default
+  - `trackCircularDependencies` - if set to `false` doesn’t track circular dependencies. `true` by default
+  - `allowMultipleDeclarations` - if set to `false` denies module overloading and provides an error. `true` by default
+  - `allowDependenciesOverride` - if set to `false` denies overriding dependencies of existing module, so only one instance can exists at a time. `true` by default
 
 #### Get current state of module in storage
 ````javascript
