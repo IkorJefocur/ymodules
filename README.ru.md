@@ -1,6 +1,7 @@
 Модульная система YModules
+=================
 
-[Что это? Зачем и для кого? Как пользоваться?](https://github.com/ymaps/modules/blob/master/what-is-this.md)
+[Что это? Зачем и для кого? Как пользоваться?](https://github.com/IkorJefocur/ymodules/blob/master/what-is-this.md)
 
 #### Требования
   1. Асинхронный require модулей

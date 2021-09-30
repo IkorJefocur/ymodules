@@ -1,10 +1,10 @@
-Modular system [![NPM version](https://badge.fury.io/js/ym.png)](http://badge.fury.io/js/ym) [![Build Status](https://travis-ci.org/ymaps/modules.png?branch=master)](https://travis-ci.org/ymaps/modules)
+Modular system
 =================
 
-[по-русски](https://github.com/ymaps/modules/blob/master/README.ru.md)
+[по-русски](https://github.com/IkorJefocur/ymodules/blob/master/README.ru.md)
 
 [What? Why and what for? How to
-use?](https://github.com/ymaps/modules/blob/master/what-is-this.md) (ru)
+use?](https://github.com/IkorJefocur/ymodules/blob/master/what-is-this.md) (ru)
 
 #### Requirements
   1. Asynchronous require for modules
