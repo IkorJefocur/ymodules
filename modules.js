@@ -48,7 +48,7 @@ function create() {
 			prev       : module.decl[0],
 			fn         : declFn,
 			state      : DECL_STATES.NOT_RESOLVED,
-			deps       : deps,
+			deps       : deps.map(normalizeDependency),
 			dependents : [],
 			exports    : undefined
 		};
@@ -70,11 +70,11 @@ function create() {
 		}
 
 		pendingRequires.push({
-			deps : modules,
-			cb   : function(exports, error) {
+			deps : modules.map(normalizeDependency),
+			cb   : function(exports, prev, error) {
 				error
 					? (errorCb || onError)(error)
-					: cb.apply(global, exports);
+					: cb.call(global, exports, prev);
 			}
 		});
 	}
@@ -136,52 +136,56 @@ function create() {
 
 	function requireDeps(fromDecl, deps, path, cb) {
 		let unresolvedDepsCnt = deps.length;
-		if (!unresolvedDepsCnt) {
-			cb([]);
-		}
+		const prev = fromDecl ? fromDecl.prev : undefined;
+		if (prev)
+			unresolvedDepsCnt++;
+		if (!unresolvedDepsCnt)
+			cb({});
 
-		const decls = [];
+		const decls = {};
 		function onDeclResolved(_, error) {
 			if (error) {
-				cb(null, error);
+				cb(null, null, error);
 				return;
 			}
 
 			if (!--unresolvedDepsCnt) {
-				const exports = decls.map(decl => decl.exports);
-				cb(exports);
+				for (let [alias, decl] of Object.entries(decls))
+					Object.defineProperty(decls, alias, {
+						get() {
+							if (decl.state === DECL_STATES.IN_RESOLVING)
+								throw buildCircularDependenceError(decl, path);
+							return decl.exports;
+						},
+						configurable: true,
+						enumerable: true
+					});
+				const args = [decls, prev && prev.exports];
+				if (deps.length === 0)
+					args.shift();
+				cb(...args);
 			}
 		}
 
 		for (let dep of deps) {
 			let decl;
+			const [name, alias, overrides] = dep;
 
-			if (typeof dep === 'string') {
-				if (!modulesStorage[dep]) {
-					cb(null, buildModuleNotFoundError(dep, fromDecl));
-					return;
-				}
-
-				decl = modulesStorage[dep].decl[0];
+			if (!modulesStorage[name]) {
+				cb(null, null, buildModuleNotFoundError(name, fromDecl));
+				return;
 			}
 
-			else if (dep instanceof Array) {
-				const [name, overrides] = dep;
+			const variants = modulesStorage[name].decl;
+			const base = variants[0];
 
+			if (overrides) {
 				if (!curOptions.allowDependenciesOverride) {
-					cb(null, buildDependenciesOverrideError(name, fromDecl));
+					cb(null, null, buildDependenciesOverrideError(name, fromDecl));
 					return;
 				}
 
-				if (!modulesStorage[name]) {
-					cb(null, buildModuleNotFoundError(name, fromDecl));
-					return;
-				}
-
-				const variants = modulesStorage[name].decl;
-				const base = variants[0];
-
-				decl = variants.find(variant => variant.deps.every((dep, index) =>
+				decl = variants.find(variant => variant.deps.every(([dep], index) =>
 					overrides[base.deps[index]]
 						? dep === overrides[base.deps[index]]
 						: dep === base.deps[index]
@@ -189,7 +193,11 @@ function create() {
 
 				if (!decl) {
 					decl = Object.assign({}, base, {
-						deps: base.deps.map(dep => dep in overrides ? overrides[dep] : dep),
+						deps: base.deps.map(dep =>
+							dep[0] in overrides
+								? [overrides[dep[0]], dep[0], undefined]
+								: dep
+						),
 						dependents: [],
 						state: DECL_STATES.NOT_RESOLVED
 					});
@@ -198,12 +206,14 @@ function create() {
 			}
 
 			else
-				decl = dep;
+				decl = base;
 
-			decls.push(decl);
-
+			decls[alias] = decl;
 			startDeclResolving(decl, path, onDeclResolved);
 		}
+
+		if (prev)
+			startDeclResolving(prev, path, onDeclResolved);
 	}
 
 	function startDeclResolving(decl, path, cb) {
@@ -212,7 +222,7 @@ function create() {
 			return;
 		} else if (decl.state === DECL_STATES.IN_RESOLVING) {
 			curOptions.trackCircularDependencies && isDependenceCircular(decl, path)
-				? cb(null, buildCircularDependenceError(decl, path))
+				? cb()
 				: decl.dependents.push(cb);
 			return;
 		}
@@ -227,20 +237,19 @@ function create() {
 		curOptions.trackCircularDependencies && (path = path.concat([decl]));
 
 		let isProvided = false;
-		const deps = decl.prev ? decl.deps.concat([decl.prev]) : decl.deps;
 
 		decl.state = DECL_STATES.IN_RESOLVING;
 		requireDeps(
 			decl,
-			deps,
+			decl.deps,
 			path,
-			function(depDeclsExports, error) {
+			function(depDeclsExports, prev, error) {
 				if (error) {
 					provideError(decl, error);
 					return;
 				}
 
-				depDeclsExports.unshift(function(exports, error) {
+				function provide(exports, error) {
 					if (isProvided) {
 						cb(null, buildDeclAreadyProvidedError(decl));
 						return;
@@ -250,10 +259,10 @@ function create() {
 					error
 						? provideError(decl, error)
 						: provideDecl(decl, exports);
-				});
+				}
 
 				const {name, deps} = decl;
-				decl.fn.apply({global, name, deps}, depDeclsExports);
+				decl.fn.call({global, name, deps}, provide, depDeclsExports, prev);
 			});
 	}
 
@@ -318,6 +327,19 @@ function buildDependenciesOverrideError(name, decl) {
 
 function isDependenceCircular(decl, path) {
 	return path.includes(decl);
+}
+
+function normalizeDependency(dep) {
+	if (typeof dep === 'string')
+		dep = [dep];
+	let [name, alias, overrides] = dep;
+	if (!overrides && typeof alias === 'object') {
+		overrides = alias;
+		alias = name;
+	}
+	if (!alias)
+		alias = name;
+	return [name, alias, overrides];
 }
 
 const nextTick = (function() {

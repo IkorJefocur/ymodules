@@ -18,14 +18,23 @@
 Спецификация API
 ----------------
 
+#### Синтаксис описания зависимости
+````javascript
+Array Dependency(
+    String name,
+    [String alias] = name
+    [Object overrides]
+)
+````
+
 #### Объявление модуля
 ````javascript
 void modules.define(
     String moduleName,
-    [String[] dependencies],
+    [Dependency[] dependencies],
     Function(
         Function([Object objectToProvide], [Error error]) provide,
-        [Object resolvedDependency, ...],
+        [Object resolvedDependencies],
         [Object previousDeclaration]
     ) declarationFunction
 )
@@ -33,8 +42,8 @@ void modules.define(
 #### Подключение модуля
 ````javascript
 void modules.require(
-    String[] dependencies,
-    Function([Object resolvedDependency, ...]) successCallbackFunction,
+    Dependency[] dependencies,
+    Function(Object resolvedDependencies) successCallbackFunction,
     [Function(Error error) errorCallbackFunction]
 )
 ````
@@ -76,7 +85,7 @@ Boolean isDefined(String moduleName)
 modules.define(
     'A',
     ['B', 'C'],
-    function(provide, b, c, prev) {
+    function(provide, {B, C}) {
         var a = {};
         provide(a);
     });
@@ -91,7 +100,7 @@ modules.define(
 modules.define(
     'C',
     ['B'],
-    function(provide, b) {
+    function(provide, {B}) {
         var c = {};
         provide(c);
     });
@@ -103,9 +112,16 @@ modules.define(
         provide(nextC);
     });
 
+modules.define(
+    'D',
+    [['A', 'main']],
+    function(provide, {main}) {
+        provide('d');
+    });
+
 modules.require(
   ['A'],
-  function(a) {
+  function(d) {
     // module 'A' now resolved to a
   });
 ````

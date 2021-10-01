@@ -12,8 +12,8 @@ describe('resolving', function() {
             provide('A');
         });
 
-        modules.require('A', function(A) {
-            A.should.have.been.equal('A');
+        modules.require('A', function(d) {
+            d.A.should.have.been.equal('A');
             done();
         });
     });
@@ -23,16 +23,16 @@ describe('resolving', function() {
             provide('A');
         });
 
-        modules.define('B', ['A'], function(provide, A) {
-            provide(A + 'B');
+        modules.define('B', ['A'], function(provide, d) {
+            provide(d.A + 'B');
         });
 
-        modules.define('C', ['A', 'B'], function(provide, A, B) {
-            provide('C' + B + A);
+        modules.define('C', ['A', 'B'], function(provide, d) {
+            provide('C' + d.B + d.A);
         });
 
-        modules.require(['C'], function(C) {
-            C.should.have.been.equal('CABA');
+        modules.require(['C'], function(d) {
+            d.C.should.have.been.equal('CABA');
             done();
         });
     });
@@ -44,20 +44,20 @@ describe('resolving', function() {
             }, 10);
         });
 
-        modules.define('B', ['A'], function(provide, A) {
+        modules.define('B', ['A'], function(provide, d) {
             setTimeout(function() {
-                provide(A + 'B');
+                provide(d.A + 'B');
             }, 10);
         });
 
-        modules.define('C', ['A', 'B'], function(provide, A, B) {
+        modules.define('C', ['A', 'B'], function(provide, d) {
             setTimeout(function() {
-                provide('C' + B + A);
+                provide('C' + d.B + d.A);
             }, 10);
         });
 
-        modules.require(['C'], function(C) {
-            C.should.have.been.equal('CABA');
+        modules.require(['C'], function(d) {
+            d.C.should.have.been.equal('CABA');
             done();
         });
     });
@@ -75,8 +75,16 @@ describe('resolving', function() {
             provide(A + 'A3');
         });
 
-        modules.require(['A'], function(A) {
-            A.should.have.been.equal('A1A2A3');
+        modules.require(['A'], function(d) {
+            d.A.should.have.been.equal('A1A2A3');
+            done();
+        });
+    });
+
+    it('should properly set aliases to required modules', function(done) {
+        modules.define('A', provide => provide('a'));
+        modules.require([['A', 'B']], d => {
+            d.B.should.have.been.equal('a');
             done();
         });
     });
@@ -84,15 +92,31 @@ describe('resolving', function() {
     it('should properly clone existing modules and override their dependencies', function(done) {
         modules.define('A', provide => provide(['a']));
         modules.define('B', provide => provide(['b']));
-        modules.define('C', ['A'], (provide, a) => provide(a.concat('c')));
-        modules.define('D', [['C', {'A': 'B'}]], (provide, c) => provide(c.concat('d')));
+        modules.define('C', ['A'], (provide, d) => provide(d.A.concat('c')));
+        modules.define('D', [['C', {'A': 'B'}]], (provide, d) => provide(d.C));
 
-        modules.require(['C', 'D'], (c, d) => {
-            c.should.have.been.deep.equal(['a', 'c']);
-            d.should.have.been.deep.equal(['b', 'c', 'd']);
+        modules.require(['C', 'D'], d => {
+            d.C.should.have.been.deep.equal(['a', 'c']);
+            d.D.should.have.been.deep.equal(['b', 'c']);
             done();
         });
-    })
+    });
+
+    it('should propely resolve non-critical circular dependencies', function(done) {
+        modules.define('A', ['B'], (provide, d) => provide({
+            val: 'A',
+            use: () => d.B.val
+        }));
+        modules.define('B', ['A'], (provide, d) => provide({
+            val: 'B',
+            use: () => d.A.val
+        }));
+
+        modules.require(['A'], function(d) {
+            d.A.use().should.be.equal('B');
+            done();
+        });
+    });
 });
 
 describe('errors', function() {
@@ -132,20 +156,23 @@ describe('errors', function() {
     });
 
     it('should throw error on circular dependence', function(done) {
-        modules.define('A', ['B'], function(provide) {
-            provide('A');
+        modules.define('A', ['C'], function(provide, d) {
+            try { provide(d.C); }
+            catch (e) { provide(null, e); }
         });
 
-        modules.define('B', ['C'], function(provide) {
-            provide('C');
+        modules.define('B', ['A'], function(provide, d) {
+            try { provide(d.A); }
+            catch (e) { provide(null, e); }
         });
 
-        modules.define('C', ['A'], function(provide) {
-            provide('A');
-        });
+        modules.define('C', ['B'], function(provide, d) {
+            try { provide(d.B); }
+            catch (e) { provide(null, e); }
+        })
 
         modules.require(['A'], function() {}, function(e) {
-            e.message.should.have.been.equal('Circular dependence has been detected: "A -> B -> C -> A"');
+            e.message.should.have.been.equal('Circular dependence has been detected: "A -> C -> B -> A"');
             done();
         });
     });
@@ -241,12 +268,12 @@ describe('errors', function() {
     });
 
     it('should allow to rerequire module after custom error', function(done) {
-        modules.define('A', ['B'], function(provide, B) {
-            provide('A' + B);
+        modules.define('A', ['B'], function(provide, d) {
+            provide('A' + d.B);
         });
 
-        modules.define('B', ['C'], function(provide, C) {
-            provide('B' + C);
+        modules.define('B', ['C'], function(provide, d) {
+            provide('B' + d.C);
         });
 
         var i = 0;
@@ -257,8 +284,8 @@ describe('errors', function() {
         });
 
         modules.require(['A'], function() {}, function() {
-            modules.require(['A'], function(A) {
-                A.should.be.equal('ABC');
+            modules.require(['A'], function(d) {
+                d.A.should.be.equal('ABC');
                 done();
             });
         });

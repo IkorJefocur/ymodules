@@ -21,14 +21,23 @@ See #2, #3 and #4 in the list of requirements.
 API spec
 ----------------
 
+#### Dependency syntax
+````javascript
+Array Dependency(
+    String name,
+    [String alias] = name
+    [Object overrides]
+)
+````
+
 #### Module declaration
 ````javascript
 void modules.define(
     String moduleName,
-    [String[] dependencies],
+    [Dependency[] dependencies],
     Function(
         Function([Object objectToProvide], [Error error]) provide,
-        [Object resolvedDependency, ...],
+        [Object resolvedDependencies],
         [Object previousDeclaration]
     ) declarationFunction
 )
@@ -36,8 +45,8 @@ void modules.define(
 #### Module usage
 ````javascript
 void modules.require(
-    String[] dependencies,
-    Function([Object resolvedDependency, ...]) successCallbackFunction,
+    Dependency[] dependencies,
+    Function(Object resolvedDependencies) successCallbackFunction,
     [Function(Error error) errorCallbackFunction]
 )
 ````
@@ -79,7 +88,7 @@ Modules modules.create()
 modules.define(
     'A',
     ['B', 'C'],
-    function(provide, b, c, prev) {
+    function(provide, {B, C}) {
         var a = {};
         provide(a);
     });
@@ -94,7 +103,7 @@ modules.define(
 modules.define(
     'C',
     ['B'],
-    function(provide, b) {
+    function(provide, {B}) {
         var c = {};
         provide(c);
     });
@@ -106,9 +115,16 @@ modules.define(
         provide(nextC);
     });
 
+modules.define(
+    'D',
+    [['A', 'main']],
+    function(provide, {main}) {
+        provide('d');
+    });
+
 modules.require(
   ['A'],
-  function(a) {
+  function(d) {
     // module 'A' now resolved to a
   });
 ````
