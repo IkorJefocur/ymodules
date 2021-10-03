@@ -195,7 +195,7 @@ function create() {
 					decl = Object.assign({}, base, {
 						deps: base.deps.map(dep =>
 							dep[0] in overrides
-								? [overrides[dep[0]], dep[0], undefined]
+								? [overrides[dep[0]], dep[1], dep[2]]
 								: dep
 						),
 						dependents: [],
